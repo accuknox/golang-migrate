@@ -8,6 +8,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"os/exec"
+	"encoding/json"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/golang-migrate/migrate/v4/database"
@@ -240,10 +242,35 @@ func (m *Mongo) Version() (version int, dirty bool, err error) {
 	}
 }
 
+type testJson struct{
+	StringType string `json:"script_type,omitempty"`
+	FilePath string `json:"file_path,omitempty"`
+}
+
 func (m *Mongo) Run(migration io.Reader) error {
 	migr, err := io.ReadAll(migration)
 	if err != nil {
 		return err
+	}
+	test:= string(migr[:])
+	fmt.Println(test)
+	var jsonData []testJson
+	er:=json.Unmarshal(migr[:], &jsonData)
+	if er!=nil{
+		fmt.Println(er)
+		return er
+	}
+	filePath:=jsonData[0].FilePath
+	fmt.Println("FilePath: ",filePath)
+	if filePath!=""{
+		fmt.Println("Running custom go file: ")
+		cmd:=exec.Command("go", "run", filePath)
+		output, err:= cmd.Output()
+		if err!=nil{
+			fmt.Println(err)
+		}
+		fmt.Println(string(output[:]))
+		return nil
 	}
 	var cmds []bson.D
 	err = bson.UnmarshalExtJSON(migr, true, &cmds)

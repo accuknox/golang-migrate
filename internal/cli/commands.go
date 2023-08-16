@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"sort"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/stub" // TODO remove again
@@ -26,7 +27,6 @@ func nextSeqVersion(matches []string, seqDigits int) (string, error) {
 	}
 
 	nextSeq := uint64(1)
-
 	if len(matches) > 0 {
 		filename := matches[len(matches)-1]
 		matchSeqStr := filepath.Base(filename)
@@ -39,7 +39,7 @@ func nextSeqVersion(matches []string, seqDigits int) (string, error) {
 		var err error
 		matchSeqStr = matchSeqStr[0:idx]
 		nextSeq, err = strconv.ParseUint(matchSeqStr, 10, 64)
-
+		fmt.Println("err: ", matchSeqStr)
 		if err != nil {
 			return "", err
 		}
@@ -82,14 +82,25 @@ func createCmd(dir string, startTime time.Time, format string, name string, ext 
 
 	dir = filepath.Clean(dir)
 	ext = "." + strings.TrimPrefix(ext, ".")
-
+	var ext2 string
+	if ext==".go"{
+		ext2=".json"
+	}else if ext==".json"{
+		ext2=".go"
+	}
 	if seq {
-		matches, err := filepath.Glob(filepath.Join(dir, "*"+ext))
-
+		matches2, err:=filepath.Glob(filepath.Join(dir, "*"+ext))
+		if err != nil {
+			return err
+		}
+		matches, err := filepath.Glob(filepath.Join(dir, "*"+ext2))
+		
 		if err != nil {
 			return err
 		}
 
+		matches=append(matches, matches2[:]...)
+		sort.Strings(matches)
 		version, err = nextSeqVersion(matches, seqDigits)
 
 		if err != nil {
