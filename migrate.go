@@ -11,11 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
-
 	"github.com/golang-migrate/migrate/v4/database"
 	iurl "github.com/golang-migrate/migrate/v4/internal/url"
 	"github.com/golang-migrate/migrate/v4/source"
+	"github.com/hashicorp/go-multierror"
 )
 
 // DefaultPrefetchMigrations sets the number of migrations to pre-read
@@ -740,11 +739,26 @@ func (m *Migrate) runMigrations(ret <-chan interface{}) error {
 			if err := m.databaseDrv.SetVersion(migr.TargetVersion, true); err != nil {
 				return err
 			}
+			m.logPrintf("Migration Version: %v\nTargetVersion: %v", migr.Version, migr.TargetVersion)
+			migr.Down = RegisteredFunctions[int64(migr.Version)].Down
+			migr.Up = RegisteredFunctions[int64(migr.Version)].Up
+			if migr.Up != nil {
+				m.logPrintf("Read and execute migration\n")
+				if migr.TargetVersion >= int(migr.Version) {
+					m.logPrintf("Migrating Up")
+					migr.Up(m.databaseDrv)
+				} else {
+					m.logPrintf("Migrating Down")
+					migr.Down(m.databaseDrv)
+				}
 
-			if migr.Body != nil {
-				m.logVerbosePrintf("Read and execute %v\n", migr.LogString())
-				if err := m.databaseDrv.Run(migr.BufferedBody); err != nil {
-					return err
+			} else {
+				m.logPrintf("Up not registered")
+				if migr.Body != nil {
+					m.logVerbosePrintf("Read and execute %v\n", migr.LogString())
+					if err := m.databaseDrv.Run(migr.BufferedBody); err != nil {
+						return err
+					}
 				}
 			}
 

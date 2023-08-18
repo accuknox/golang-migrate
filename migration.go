@@ -4,12 +4,20 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/golang-migrate/migrate/v4/database"
 )
 
 // DefaultBufferSize sets the in memory buffer size (in Bytes) for every
 // pre-read migration (see DefaultPrefetchMigrations).
 var DefaultBufferSize = uint(100000)
+
+type GoMigration func(database.Driver) error
 
 // Migration holds information about a migration.
 // It is initially created from data coming from the source and then
@@ -54,6 +62,10 @@ type Migration struct {
 
 	// BytesRead holds the number of Bytes read from the migration source.
 	BytesRead int64
+
+	Up GoMigration
+
+	Down GoMigration
 }
 
 // NewMigration returns a new Migration and sets the body, identifier,
@@ -157,4 +169,37 @@ func (m *Migration) Buffer() error {
 	}
 
 	return nil
+}
+
+var RegisteredFunctions = make(map[int64]*Migration)
+
+// RegisterFunction stores the migration function defined in the scripts
+// in RegisteredFunctions map corresponding to the migration version.
+func RegisterFunction(fn GoMigration) error {
+	_, fileName, _, _ := runtime.Caller(1)
+	version, direction := parseFileName(fileName)
+	var m Migration
+	if _, exists := RegisteredFunctions[version]; exists {
+		m = *RegisteredFunctions[version]
+	}
+	if direction == "up" {
+		m.Up = fn
+	} else {
+		m.Down = fn
+	}
+	RegisteredFunctions[version] = &m
+	return nil
+}
+
+// parseFileName extracts the migration version and migration direction
+// from the caller migration script
+func parseFileName(fileName string) (int64, string) {
+	base := filepath.Base(fileName)
+	fileNameSplit := strings.Split(base, ".")
+	index := strings.Index(fileNameSplit[0], "_")
+	version, err := strconv.ParseInt(fileNameSplit[0][:index], 10, 64)
+	if err != nil {
+		return 0, ""
+	}
+	return version, fileNameSplit[1]
 }
