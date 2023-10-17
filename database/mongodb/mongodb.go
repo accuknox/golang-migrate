@@ -402,3 +402,7 @@ func (m *Mongo) Unlock() error {
 		return nil
 	})
 }
+
+func (m *Mongo) GetDbConnection() *mongo.Database {
+	return m.db
+}
